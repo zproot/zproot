@@ -13,6 +13,7 @@ const syscalls = @import("syscall/numbers.zig");
 const sig = @import("signal/numbers.zig");
 const fork = @import("exec/fork.zig");
 const execve = @import("exec/execve.zig");
+const interp = @import("exec/interp.zig");
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
