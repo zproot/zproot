@@ -19,3 +19,16 @@ pub fn cstring(pid: types.pid_t, addr: u64, str: []const u8) !void {
         }
     }
 }
+
+pub fn raw(pid: types.pid_t, addr: u64, buf: []const u8) !void {
+    var word: u64 = 0;
+    var i: usize = 0;
+    while (i < buf.len) : (i += 1) {
+        word |= @as(u64, buf[i]) << @intCast((i % 8) * 8);
+        if (i % 8 == 7 or i == buf.len - 1) {
+            const base = addr + (i - (i % 8));
+            try poke(pid, base, word);
+            word = 0;
+        }
+    }
+}
