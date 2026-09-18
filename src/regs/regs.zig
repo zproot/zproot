@@ -40,7 +40,7 @@ pub const Regs = if (arch == .x86_64) struct {
     pub fn sp(self: @This()) u64 {
         return self.raw.sp;
     }
-} else @compileError("unsupported arch");
+} else @compileError("zproot: unsupported architecture");
 
 pub fn get(pid: types.pid_t) !Regs {
     var regs: Regs = undefined;
