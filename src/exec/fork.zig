@@ -10,7 +10,7 @@ pub fn doFork() !types.pid_t {
         break :blk linux.syscall0(.fork);
     } else if (arch == .aarch64) blk: {
         break :blk linux.syscall5(.clone, sig.SIGCHLD_FLAG, 0, 0, 0, 0);
-    } else @compileError("unsupported arch");
+    } else @compileError("zproot: unsupported architecture");
 
     const signed: isize = @bitCast(result);
     if (signed < 0) return error.ForkFailed;
