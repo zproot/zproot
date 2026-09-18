@@ -148,7 +148,7 @@ pub fn main(init: std.process.Init) !void {
                                         patched_buf[new_path.len + suffix.len] = 0;
                                         const patched_z: [*:0]const u8 = @ptrCast(&patched_buf);
 
-                                        interp.patch(new_path_z, patched_z, info, loader) catch |e| {
+                                        _ = interp.patch(new_path_z, patched_z, info, loader) catch |e| {
                                             std.log.warn("execve: patch failed: {}", .{e});
                                             entering = !entering;
                                             continue;
