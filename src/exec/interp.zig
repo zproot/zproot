@@ -10,7 +10,7 @@ const O_CREAT: usize = 0x40;
 const O_TRUNC: usize = 0x200;
 const O_CLOEXEC: usize = 0x80000;
 
-const AT_PAGESZ: u64 = 6;
+const AT_FDCWD: usize = @bitCast(@as(isize, -100));
 
 const Elf64_Ehdr = extern struct {
     e_ident: [16]u8,
@@ -53,7 +53,7 @@ pub const PatchResult = struct {
 };
 
 fn openRead(path: [*:0]const u8) !i32 {
-    const fd = linux.syscall3(.openat, @as(usize, -100), @intFromPtr(path), O_RDONLY | O_CLOEXEC);
+    const fd = linux.syscall3(.openat, AT_FDCWD, @intFromPtr(path), O_RDONLY | O_CLOEXEC);
     const s: isize = @bitCast(fd);
     if (s < 0) return error.OpenFailed;
     return @intCast(s);
@@ -62,7 +62,7 @@ fn openRead(path: [*:0]const u8) !i32 {
 fn openWrite(path: [*:0]const u8) !i32 {
     const fd = linux.syscall4(
         .openat,
-        @as(usize, -100),
+        AT_FDCWD,
         @intFromPtr(path),
         O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC,
         @as(usize, 0o755),
