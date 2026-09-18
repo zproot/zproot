@@ -13,6 +13,7 @@ const syscalls = @import("syscall/numbers.zig");
 const sig = @import("signal/numbers.zig");
 const fork = @import("exec/fork.zig");
 const execve = @import("exec/execve.zig");
+const interp = @import("exec/interp.zig");
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -115,6 +116,15 @@ pub fn main(init: std.process.Init) !void {
 
                 if (path.rootfs_len > 0 and path.shouldPrefix(p)) {
                     if (path.build(&new_path_buf, p)) |new_path| {
+                        if (nr == syscalls.SYS_EXECVE) {
+                            const new_path_z: [*:0]const u8 = @ptrCast(new_path.ptr);
+                            if (interp.locate(new_path_z)) |info| {
+                                std.log.info("execve: dynamic binary, interp_size={d}", .{info.interp_size});
+                            } else |_| {
+                                std.log.info("execve: static binary", .{});
+                            }
+                        }
+
                         const scratch = r.sp() - 8192;
                         memory_write.cstring(pid, scratch, new_path) catch {
                             std.log.err("write failed for {s}", .{p});
