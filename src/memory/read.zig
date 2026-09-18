@@ -61,17 +61,3 @@ pub fn cstring(pid: types.pid_t, addr: u64, buf: []u8) ![]u8 {
     }
     return error.PathTooLong;
 }
-
-pub fn raw(pid: types.pid_t, addr: u64, buf: []u8) !void {
-    if (processVm(pid, addr, buf)) |n| {
-        if (n == buf.len) return;
-    } else |_| {}
-
-    var i: usize = 0;
-    while (i < buf.len) : (i += 8) {
-        const word = try peekAligned(pid, addr + i);
-        const bytes = std.mem.asBytes(&word);
-        const copy_len = @min(8, buf.len - i);
-        std.mem.copyForwards(u8, buf[i .. i + copy_len], bytes[0..copy_len]);
-    }
-}
