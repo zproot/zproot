@@ -4,6 +4,14 @@ const linux = std.os.linux;
 const PT_LOAD: u32 = 1;
 const PT_INTERP: u32 = 3;
 
+const O_RDONLY: usize = 0;
+const O_WRONLY: usize = 1;
+const O_CREAT: usize = 0x40;
+const O_TRUNC: usize = 0x200;
+const O_CLOEXEC: usize = 0x80000;
+
+const AT_PAGESZ: u64 = 6;
+
 const Elf64_Ehdr = extern struct {
     e_ident: [16]u8,
     e_type: u16,
@@ -33,140 +41,155 @@ const Elf64_Phdr = extern struct {
 };
 
 pub const InterpInfo = struct {
-    offset: u64,
-    size: u64,
-    text: [512]u8,
-    text_len: usize,
+    phdr_offset: u64,
+    interp_offset: u64,
+    interp_size: u64,
+    last_load_end: u64,
 };
 
-fn openAt(path: [*:0]const u8) !i32 {
-    const fd = linux.syscall3(.openat, @as(usize, -100), @intFromPtr(path), 0);
-    const signed: isize = @bitCast(fd);
-    if (signed < 0) return error.OpenFailed;
-    return @intCast(signed);
+pub const PatchResult = struct {
+    used_new_location: bool,
+    new_offset: u64,
+};
+
+fn openRead(path: [*:0]const u8) !i32 {
+    const fd = linux.syscall3(.openat, @as(usize, -100), @intFromPtr(path), O_RDONLY | O_CLOEXEC);
+    const s: isize = @bitCast(fd);
+    if (s < 0) return error.OpenFailed;
+    return @intCast(s);
 }
 
-fn close(fd: i32) void {
+fn openWrite(path: [*:0]const u8) !i32 {
+    const fd = linux.syscall4(
+        .openat,
+        @as(usize, -100),
+        @intFromPtr(path),
+        O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC,
+        @as(usize, 0o755),
+    );
+    const s: isize = @bitCast(fd);
+    if (s < 0) return error.CreateFailed;
+    return @intCast(s);
+}
+
+fn closeFd(fd: i32) void {
     _ = linux.syscall1(.close, @intCast(fd));
 }
 
-fn pread(fd: i32, buf: []u8, offset: u64) !usize {
-    const ret = linux.syscall6(
-        .pread64,
-        @intCast(fd),
-        @intFromPtr(buf.ptr),
-        buf.len,
-        offset,
-        0,
-        0,
-    );
-    const signed: isize = @bitCast(ret);
-    if (signed < 0) return error.ReadFailed;
-    return @intCast(signed);
+fn preadFd(fd: i32, buf: []u8, off: u64) !usize {
+    const ret = linux.syscall6(.pread64, @intCast(fd), @intFromPtr(buf.ptr), buf.len, off, 0, 0);
+    const s: isize = @bitCast(ret);
+    if (s < 0) return error.ReadFailed;
+    return @intCast(s);
 }
 
-/// Read the ELF at `path` and locate PT_INTERP.
-/// Returns the file offset, the size, and the interpreter path string.
+fn pwriteFd(fd: i32, buf: []const u8, off: u64) !usize {
+    const ret = linux.syscall6(.pwrite64, @intCast(fd), @intFromPtr(buf.ptr), buf.len, off, 0, 0);
+    const s: isize = @bitCast(ret);
+    if (s < 0) return error.WriteFailed;
+    return @intCast(s);
+}
+
+fn ftruncate(fd: i32, size: u64) !void {
+    const ret = linux.syscall2(.ftruncate, @intCast(fd), size);
+    const s: isize = @bitCast(ret);
+    if (s < 0) return error.TruncateFailed;
+}
+
 pub fn locate(path: [*:0]const u8) !InterpInfo {
-    const fd = try openAt(path);
-    defer close(fd);
+    const fd = try openRead(path);
+    defer closeFd(fd);
 
     var ehdr: Elf64_Ehdr = undefined;
-    const ehdr_bytes = std.mem.asBytes(&ehdr);
-    if (try pread(fd, ehdr_bytes, 0) != @sizeOf(Elf64_Ehdr)) return error.BadElf;
-
+    if (try preadFd(fd, std.mem.asBytes(&ehdr), 0) != @sizeOf(Elf64_Ehdr))
+        return error.BadElf;
     if (ehdr.e_ident[0] != 0x7f or ehdr.e_ident[1] != 'E' or
         ehdr.e_ident[2] != 'L' or ehdr.e_ident[3] != 'F')
-    {
         return error.NotElf;
-    }
-
     if (ehdr.e_phnum == 0) return error.NoPhdr;
 
-    var i: u16 = 0;
-    while (i < ehdr.e_phnum) : (i += 1) {
-        var phdr: Elf64_Phdr = undefined;
-        const off = ehdr.e_phoff + @as(u64, i) * @sizeOf(Elf64_Phdr);
-        const phdr_bytes = std.mem.asBytes(&phdr);
-        if (try pread(fd, phdr_bytes, off) != @sizeOf(Elf64_Phdr)) return error.BadPhdr;
+    var ph_i: u16 = 0;
+    var interp_found = false;
+    var interp_phdr_off: u64 = 0;
+    var interp_off: u64 = 0;
+    var interp_size: u64 = 0;
+    var last_end: u64 = 0;
 
-        if (phdr.p_type == PT_INTERP) {
-            if (phdr.p_filesz > 512) return error.InterpTooLong;
+    while (ph_i < ehdr.e_phnum) : (ph_i += 1) {
+        var ph: Elf64_Phdr = undefined;
+        const off = ehdr.e_phoff + @as(u64, ph_i) * @sizeOf(Elf64_Phdr);
+        if (try preadFd(fd, std.mem.asBytes(&ph), off) != @sizeOf(Elf64_Phdr))
+            return error.BadPhdr;
 
-            var info: InterpInfo = .{
-                .offset = phdr.p_offset,
-                .size = phdr.p_filesz,
-                .text = undefined,
-                .text_len = 0,
-            };
-
-            const buf = info.text[0..@intCast(phdr.p_filesz)];
-            if (try pread(fd, buf, phdr.p_offset) != phdr.p_filesz) return error.BadInterp;
-
-            var len: usize = 0;
-            while (len < buf.len and buf[len] != 0) : (len += 1) {}
-            info.text_len = len;
-            return info;
+        if (ph.p_type == PT_INTERP) {
+            interp_phdr_off = off;
+            interp_off = ph.p_offset;
+            interp_size = ph.p_filesz;
+            interp_found = true;
+        }
+        if (ph.p_type == PT_LOAD) {
+            const end = ph.p_offset + ph.p_filesz;
+            if (end > last_end) last_end = end;
         }
     }
 
-    return error.NoInterp;
+    if (!interp_found) return error.NoInterp;
+
+    return .{
+        .phdr_offset = interp_phdr_off,
+        .interp_offset = interp_off,
+        .interp_size = interp_size,
+        .last_load_end = last_end,
+    };
 }
 
-/// Copy the ELF at `src` to `dst`, replacing the PT_INTERP string with `new_interp`.
-/// `new_interp` must be at most `info.size` bytes, including the null terminator.
-/// For a longer loader path, the program header offset must be relocated instead.
 pub fn patch(
     src: [*:0]const u8,
     dst: [*:0]const u8,
     info: InterpInfo,
     new_interp: []const u8,
-) !void {
-    if (new_interp.len + 1 > info.size) return error.NewInterpTooLong;
-
-    const src_fd = try openAt(src);
-    defer close(src_fd);
-
-    const dst_fd = linux.syscall4(
-        .openat,
-        @as(usize, -100),
-        @intFromPtr(dst),
-        @as(usize, 0x241),
-        @as(usize, 0o755),
-    );
-    const signed: isize = @bitCast(dst_fd);
-    if (signed < 0) return error.CreateFailed;
-    const out_fd: i32 = @intCast(signed);
-    defer close(out_fd);
+) !PatchResult {
+    const src_fd = try openRead(src);
+    defer closeFd(src_fd);
+    const dst_fd = try openWrite(dst);
+    defer closeFd(dst_fd);
 
     var buf: [65536]u8 = undefined;
-    var offset: u64 = 0;
+    var off: u64 = 0;
     while (true) {
-        const n = try pread(src_fd, &buf, offset);
+        const n = try preadFd(src_fd, &buf, off);
         if (n == 0) break;
-        const w = linux.syscall3(
-            .write,
-            @intCast(out_fd),
-            @intFromPtr(&buf),
-            n,
-        );
-        const ws: isize = @bitCast(w);
-        if (ws < 0) return error.WriteFailed;
-        offset += n;
+        if (try pwriteFd(dst_fd, buf[0..n], off) != n) return error.WriteFailed;
+        off += n;
+    }
+    const file_size = off;
+
+    if (new_interp.len + 1 <= info.interp_size) {
+        var slot: [512]u8 = [_]u8{0} ** 512;
+        @memcpy(slot[0..new_interp.len], new_interp);
+        if (try pwriteFd(dst_fd, slot[0..@intCast(info.interp_size)], info.interp_offset) != info.interp_size)
+            return error.WriteFailed;
+        return .{ .used_new_location = false, .new_offset = info.interp_offset };
     }
 
-    var interp_buf: [512]u8 = [_]u8{0} ** 512;
-    @memcpy(interp_buf[0..new_interp.len], new_interp);
+    const append_off = (info.last_load_end + 0xfff) & ~@as(u64, 0xfff);
+    var slot: [512]u8 = [_]u8{0} ** 512;
+    @memcpy(slot[0..new_interp.len], new_interp);
+    const new_size = new_interp.len + 1;
+    if (try pwriteFd(dst_fd, slot[0..new_size], append_off) != new_size)
+        return error.WriteFailed;
 
-    const pwrite_ret = linux.syscall6(
-        .pwrite64,
-        @intCast(out_fd),
-        @intFromPtr(&interp_buf),
-        info.size,
-        info.offset,
-        0,
-        0,
-    );
-    const ps: isize = @bitCast(pwrite_ret);
-    if (ps < 0) return error.WriteFailed;
+    var ph: Elf64_Phdr = undefined;
+    if (try preadFd(dst_fd, std.mem.asBytes(&ph), info.phdr_offset) != @sizeOf(Elf64_Phdr))
+        return error.BadPhdr;
+    ph.p_offset = append_off;
+    ph.p_filesz = new_size;
+    ph.p_memsz = new_size;
+    if (try pwriteFd(dst_fd, std.mem.asBytes(&ph), info.phdr_offset) != @sizeOf(Elf64_Phdr))
+        return error.WriteFailed;
+
+    const needed = append_off + new_size;
+    if (needed > file_size) try ftruncate(dst_fd, needed);
+
+    return .{ .used_new_location = true, .new_offset = append_off };
 }
