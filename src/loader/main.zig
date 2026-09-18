@@ -190,13 +190,9 @@ fn loaderMain(sp: usize) callconv(.c) noreturn {
     entry_fn();
 }
 
-comptime {
-    @export(&loaderMain, .{ .name = "loader_main", .linkage = .strong });
-}
-
-export fn _start() callconv(.naked) noreturn {
+pub export fn _start() callconv(.naked) noreturn {
     asm volatile(
         \\ mov x0, sp
-        \\ b loader_main
+        \\ b loaderMain
     );
 }
