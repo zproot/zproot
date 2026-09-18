@@ -15,6 +15,42 @@ const fork = @import("exec/fork.zig");
 const execve = @import("exec/execve.zig");
 const interp = @import("exec/interp.zig");
 
+fn rewriteEnvp(
+    pid: types.pid_t,
+    orig_envp: u64,
+    scratch_top: u64,
+    extra_var: []const u8,
+) !u64 {
+    var count: usize = 0;
+    while (count < 256) : (count += 1) {
+        const ptr_addr = orig_envp + count * 8;
+        const w = memory_read.word(pid, ptr_addr) catch break;
+        if (w == 0) break;
+    }
+
+    var extra_buf: [1024]u8 = undefined;
+    if (extra_var.len + 1 > extra_buf.len) return error.EnvVarTooLong;
+    @memcpy(extra_buf[0..extra_var.len], extra_var);
+    extra_buf[extra_var.len] = 0;
+    const extra_slice = extra_buf[0 .. extra_var.len + 1];
+
+    try memory_write.cstring(pid, scratch_top, extra_slice[0..extra_var.len]);
+
+    const extra_region: u64 = (extra_slice.len + 7) & ~@as(u64, 7);
+    var ptr_array_addr = scratch_top + extra_region;
+    ptr_array_addr = (ptr_array_addr + 7) & ~@as(u64, 7);
+
+    var i: usize = 0;
+    while (i < count) : (i += 1) {
+        const w = memory_read.word(pid, orig_envp + i * 8) catch 0;
+        try memory_write.word(pid, ptr_array_addr + i * 8, w);
+    }
+    try memory_write.word(pid, ptr_array_addr + count * 8, scratch_top);
+    try memory_write.word(pid, ptr_array_addr + (count + 1) * 8, 0);
+
+    return ptr_array_addr;
+}
+
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
@@ -87,6 +123,9 @@ pub fn main(init: std.process.Init) !void {
     var path_buf: [4096]u8 = undefined;
     var new_path_buf: [4096]u8 = undefined;
     var patched_buf: [4096]u8 = undefined;
+    var interp_buf: [512]u8 = undefined;
+    var real_interp_buf: [1024]u8 = undefined;
+    var env_buf: [1024]u8 = undefined;
 
     while (true) {
         _ = ptrace.call(ptrace.PTRACE_SYSCALL, pid, 0, 0);
@@ -155,12 +194,46 @@ pub fn main(init: std.process.Init) !void {
                                         };
 
                                         target_path = patched_buf[0 .. new_path.len + suffix.len];
-                                        std.log.info("execve: patched {s} -> {s}", .{ p, target_path });
+
+                                        if (interp.readInterp(new_path_z, info, &interp_buf)) |interp_name| {
+                                            const real_interp = std.fmt.bufPrint(
+                                                &real_interp_buf,
+                                                "{s}{s}",
+                                                .{ path.rootfs(), interp_name },
+                                            ) catch null;
+
+                                            if (real_interp) |ri| {
+                                                const env_str = std.fmt.bufPrint(
+                                                    &env_buf,
+                                                    "ZPROOT_REAL_INTERP={s}",
+                                                    .{ri},
+                                                ) catch null;
+
+                                                if (env_str) |es| {
+                                                    const env_scratch = r.sp() - 65536;
+                                                    const orig_envp = r.arg(2);
+                                                    if (rewriteEnvp(pid, orig_envp, env_scratch, es)) |new_envp| {
+                                                        regs.setArg(pid, 2, new_envp) catch {
+                                                            std.log.warn("execve: setarg envp failed", .{});
+                                                        };
+                                                        std.log.info("execve: patched {s} interp={s}", .{ p, ri });
+                                                    } else |e| {
+                                                        std.log.warn("execve: envp rewrite failed: {}", .{e});
+                                                    }
+                                                } else |_| {
+                                                    std.log.warn("execve: env too long", .{});
+                                                }
+                                            } else |_| {
+                                                std.log.warn("execve: real interp path too long", .{});
+                                            }
+                                        } else |_| {
+                                            std.log.warn("execve: could not read PT_INTERP string", .{});
+                                        }
                                     } else {
                                         std.log.warn("execve: patched path too long", .{});
                                     }
                                 } else {
-                                    std.log.info("execve: dynamic binary, no --loader set", .{});
+                                    std.log.info("execve: dynamic binary, no --loader", .{});
                                 }
                             } else |_| {
                                 std.log.info("execve: static binary", .{});
