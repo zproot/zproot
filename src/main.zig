@@ -179,65 +179,53 @@ pub fn main(init: std.process.Init) !void {
                         if (nr == syscalls.SYS_EXECVE) {
                             const new_path_z: [*:0]const u8 = @ptrCast(new_path.ptr);
                             if (interp.locate(new_path_z)) |info| {
-                                if (loader_path) |loader| {
-                                    const suffix = ".zproot";
-                                    if (new_path.len + suffix.len + 1 <= patched_buf.len) {
-                                        @memcpy(patched_buf[0..new_path.len], new_path);
-                                        @memcpy(patched_buf[new_path.len .. new_path.len + suffix.len], suffix);
-                                        patched_buf[new_path.len + suffix.len] = 0;
-                                        const patched_z: [*:0]const u8 = @ptrCast(&patched_buf);
+                               if (loader_path) |loader| {
+                                   const suffix = ".zproot";
+                                   if (new_path.len + suffix.len + 1 <= patched_buf.len) {
+                                       @memcpy(patched_buf[0..new_path.len], new_path);
+                                       @memcpy(patched_buf[new_path.len .. new_path.len + suffix.len], suffix);
+                                       patched_buf[new_path.len + suffix.len] = 0;
+                                       const patched_z: [*:0]const u8 = @ptrCast(&patched_buf);
 
-                                        _ = interp.patch(new_path_z, patched_z, info, loader) catch |e| {
-                                            std.log.warn("execve: patch failed: {}", .{e});
-                                            entering = !entering;
-                                            continue;
-                                        };
+                                       _ = interp.patch(new_path_z, patched_z, info, loader) catch |e| {
+                                           std.log.warn("execve: patch failed: {}", .{e});
+                                           entering = !entering;
+                                           continue;
+                                       };
 
-                                        target_path = patched_buf[0 .. new_path.len + suffix.len];
+                                       target_path = patched_buf[0 .. new_path.len + suffix.len];
 
-                                        if (interp.readInterp(new_path_z, info, &interp_buf)) |interp_name| {
-                                            const real_interp = std.fmt.bufPrint(
-                                                &real_interp_buf,
-                                                "{s}{s}",
-                                                .{ path.rootfs(), interp_name },
-                                            ) catch null;
-
-                                            if (real_interp) |ri| {
-                                                const env_str = std.fmt.bufPrint(
-                                                    &env_buf,
-                                                    "ZPROOT_REAL_INTERP={s}",
-                                                    .{ri},
-                                                ) catch null;
-
-                                                if (env_str) |es| {
-                                                    const env_scratch = r.sp() - 65536;
-                                                    const orig_envp = r.arg(2);
-                                                    if (rewriteEnvp(pid, orig_envp, env_scratch, es)) |new_envp| {
-                                                        regs.setArg(pid, 2, new_envp) catch {
-                                                            std.log.warn("execve: setarg envp failed", .{});
-                                                        };
-                                                        std.log.info("execve: patched {s} interp={s}", .{ p, ri });
-                                                    } else |e| {
-                                                        std.log.warn("execve: envp rewrite failed: {}", .{e});
-                                                    }
-                                                } else |_| {
-                                                    std.log.warn("execve: env too long", .{});
-                                                }
-                                            } else |_| {
-                                                std.log.warn("execve: real interp path too long", .{});
-                                            }
-                                        } else |_| {
-                                            std.log.warn("execve: could not read PT_INTERP string", .{});
-                                        }
-                                    } else {
-                                        std.log.warn("execve: patched path too long", .{});
-                                    }
-                                } else {
-                                    std.log.info("execve: dynamic binary, no --loader", .{});
-                                }
-                            } else |_| {
-                                std.log.info("execve: static binary", .{});
-                            }
+                                       if (interp.readInterp(new_path_z, info, &interp_buf)) |interp_name| {
+                                           if (std.fmt.bufPrint(&real_interp_buf, "{s}{s}", .{ path.rootfs(), interp_name })) |ri| {
+                                               if (std.fmt.bufPrint(&env_buf, "ZPROOT_REAL_INTERP={s}", .{ri})) |es| {
+                                                   const env_scratch = r.sp() - 65536;
+                                                   const orig_envp = r.arg(2);
+                                                   if (rewriteEnvp(pid, orig_envp, env_scratch, es)) |new_envp| {
+                                                       regs.setArg(pid, 2, new_envp) catch {
+                                                          std.log.warn("execve: setarg envp failed", .{});
+                                                       };
+                                                       std.log.info("execve: patched {s} interp={s}", .{ p, ri });
+                                                   } else |e| {
+                                                       std.log.warn("execve: envp rewrite failed: {}", .{e});
+                                                   }
+                                               } else |_| {
+                                                   std.log.warn("execve: env too long", .{});
+                                               }
+                                           } else |_| {
+                                               std.log.warn("execve: real interp path too long", .{});
+                                           }
+                                       } else |_| {
+                                           std.log.warn("execve: could not read PT_INTERP string", .{});
+                                       }
+                                   } else {
+                                       std.log.warn("execve: patched path too long", .{});
+                                   }
+                               } else {
+                                   std.log.info("execve: dynamic binary, no --loader", .{});
+                               }
+                           } else |_| {
+                               std.log.info("execve: static binary", .{});
+                           }
                         }
 
                         const scratch = r.sp() - 8192;
