@@ -1,4 +1,4 @@
-name: zproot
+name: Build - zproot
 
 on:
   push:
@@ -19,27 +19,22 @@ jobs:
         with:
           version: 0.16.0
 
-      - name: Setup JDK 17
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Build zproot for Android
+      - name: Build for Android
         run: zig build -Dtarget=aarch64-linux-android -Doptimize=ReleaseSafe
 
-      - name: Copy binary into jniLibs
-        run: |
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          cp zig-out/bin/zproot android/app/src/main/jniLibs/arm64-v8a/libzproot.so
-          chmod +x android/app/src/main/jniLibs/arm64-v8a/libzproot.so
+      - name: Verify Android binary
+        run: file zig-out/bin/zproot zig-out/bin/zproot-loader
 
-      - name: Build APK
-        working-directory: android
-        run: ./gradlew assembleRelease
+      - name: Build for musl
+        run: zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
 
-      - name: Upload APK
+      - name: Verify musl binary
+        run: file zig-out/bin/zproot zig-out/bin/zproot-loader
+
+      - name: Upload tracer
         uses: actions/upload-artifact@v7
         with:
-          name: zproot-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          name: zproot-aarch64-linux-android
+          path: |
+            zig-out/bin/zproot
+            zig-out/bin/zproot-loader
