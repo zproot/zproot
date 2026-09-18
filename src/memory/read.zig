@@ -43,21 +43,25 @@ pub fn cstring(pid: types.pid_t, addr: u64, buf: []u8) ![]u8 {
 
     const align_offset: usize = @intCast(addr & 7);
     var word_addr = addr & ~@as(u64, 7);
-    var word: u64 = 0;
+    var w: u64 = 0;
     var byte_in_word: usize = align_offset;
     var i: usize = 0;
 
     while (i < buf.len) {
         if (byte_in_word == 0) {
-            word = peekAligned(pid, word_addr) catch return error.PtraceFailed;
+            w = peekAligned(pid, word_addr) catch return error.PtraceFailed;
             word_addr += 8;
         }
-        const byte: u8 = @truncate(word);
+        const byte: u8 = @truncate(w);
         buf[i] = byte;
         if (byte == 0) return buf[0..i];
-        word >>= 8;
+        w >>= 8;
         byte_in_word = (byte_in_word + 1) % 8;
         i += 1;
     }
     return error.PathTooLong;
+}
+
+pub fn word(pid: types.pid_t, addr: u64) !u64 {
+    return peekAligned(pid, addr);
 }
