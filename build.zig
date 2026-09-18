@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     loader.pie = true;
+    loader.entry = .disabled;
 
     b.installArtifact(tracer);
     b.installArtifact(loader);
