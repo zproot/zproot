@@ -12,12 +12,9 @@ const MAP_FIXED: u32 = 0x10;
 const MAP_ANONYMOUS: u32 = 0x20;
 
 const AT_NULL: u64 = 0;
-const AT_PHDR: u64 = 3;
-const AT_PHENT: u64 = 4;
-const AT_PHNUM: u64 = 5;
-const AT_PAGESZ: u64 = 6;
 const AT_BASE: u64 = 7;
-const AT_ENTRY: u64 = 9;
+
+const AT_FDCWD: usize = @bitCast(@as(isize, -100));
 
 const Elf64_Ehdr = extern struct {
     e_ident: [16]u8,
@@ -53,7 +50,7 @@ fn exitNow(code: u8) noreturn {
 }
 
 fn openRead(path: [*:0]const u8) ?i32 {
-    const fd = linux.syscall3(.openat, @as(usize, -100), @intFromPtr(path), @as(usize, 0));
+    const fd = linux.syscall3(.openat, AT_FDCWD, @intFromPtr(path), @as(usize, 0));
     const s: isize = @bitCast(fd);
     if (s < 0) return null;
     return @intCast(s);
@@ -118,11 +115,6 @@ fn stackArgc(sp: usize) usize {
     return p[0];
 }
 
-fn stackArgv(sp: usize) [*]?[*:0]u8 {
-    const p: [*]usize = @ptrFromInt(sp);
-    return @ptrCast(@alignCast(&p[1]));
-}
-
 fn stackEnvp(sp: usize) [*]?[*:0]u8 {
     const argc = stackArgc(sp);
     const p: [*]usize = @ptrFromInt(sp);
@@ -136,7 +128,7 @@ fn stackAuxv(sp: usize) [*]u64 {
     return @ptrCast(@alignCast(&after[env_count + 1]));
 }
 
-fn loaderMain(sp: usize) noreturn {
+fn loaderMain(sp: usize) callconv(.c) noreturn {
     const envp = stackEnvp(sp);
     const real_interp = findEnv(envp, "ZPROOT_REAL_INTERP") orelse exitNow(127);
 
@@ -164,9 +156,7 @@ fn loaderMain(sp: usize) noreturn {
         if (ph.p_flags & 0x4 != 0) prot |= PROT_EXEC;
 
         const page: u64 = 0x1000;
-        const vaddr_page = ph.p_vaddr & ~(page - 1);
         const offset_page = ph.p_offset & ~(page - 1);
-        const delta = ph.p_vaddr - ph.p_offset;
         const map_addr: usize = @intCast(ph.p_vaddr - (ph.p_offset - offset_page));
         const map_len: usize = @intCast((ph.p_offset - offset_page) + ph.p_memsz);
 
@@ -180,8 +170,6 @@ fn loaderMain(sp: usize) noreturn {
         } else {
             if (!mmapAnon(map_addr, map_len, prot)) exitNow(127);
         }
-        _ = vaddr_page;
-        _ = delta;
     }
 
     if (!found_base) exitNow(127);
@@ -198,13 +186,17 @@ fn loaderMain(sp: usize) noreturn {
     }
 
     const entry: usize = @intCast(ehdr.e_entry);
-    const entry_fn: *const fn () callconv(.C) noreturn = @ptrFromInt(entry);
+    const entry_fn: *const fn () callconv(.c) noreturn = @ptrFromInt(entry);
     entry_fn();
 }
 
-export fn _start() callconv(.Naked) noreturn {
+comptime {
+    @export(&loaderMain, .{ .name = "loader_main", .linkage = .strong });
+}
+
+export fn _start() callconv(.naked) noreturn {
     asm volatile(
         \\ mov x0, sp
-        \\ b loaderMain
+        \\ b loader_main
     );
 }
