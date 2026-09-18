@@ -4,26 +4,30 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    std.debug.print("[zproot] building {s}-{s}-{s} ({s})\n", .{
-        @tagName(target.result.cpu.arch),
-        @tagName(target.result.os.tag),
-        @tagName(target.result.abi),
-        @tagName(optimize),
-    });
-
-    const root_module = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = false,
-        .pic = true,
-    });
-
-    const exe = b.addExecutable(.{
+    const tracer = b.addExecutable(.{
         .name = "zproot",
-        .root_module = root_module,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = false,
+            .pic = true,
+        }),
     });
-    exe.pie = true;
+    tracer.pie = true;
 
-    b.installArtifact(exe);
+    const loader = b.addExecutable(.{
+        .name = "zproot-loader",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/loader/main.zig"),
+            .target = target,
+            .optimize = .ReleaseSmall,
+            .link_libc = false,
+            .pic = true,
+        }),
+    });
+    loader.pie = true;
+
+    b.installArtifact(tracer);
+    b.installArtifact(loader);
 }
