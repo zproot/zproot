@@ -128,7 +128,7 @@ fn stackAuxv(sp: usize) [*]u64 {
     return @ptrCast(@alignCast(&after[env_count + 1]));
 }
 
-fn loaderMain(sp: usize) callconv(.c) noreturn {
+export fn loaderMain(sp: usize) callconv(.c) noreturn {
     const envp = stackEnvp(sp);
     const real_interp = findEnv(envp, "ZPROOT_REAL_INTERP") orelse exitNow(127);
 
