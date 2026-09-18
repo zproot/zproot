@@ -19,21 +19,39 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     if (args.len < 2) {
-        std.log.err("usage: zproot [--rootfs <path>] <program> [args...]", .{});
+        std.log.err("usage: zproot [--rootfs <path>] [--loader <path>] <program> [args...]", .{});
         return;
     }
 
     var start_idx: usize = 1;
-    if (std.mem.eql(u8, args[1], "--rootfs")) {
-        if (args.len < 4) {
-            std.log.err("--rootfs requires a path and a program", .{});
-            return;
+    var loader_path: ?[]const u8 = null;
+
+    while (start_idx < args.len) {
+        if (std.mem.eql(u8, args[start_idx], "--rootfs")) {
+            if (start_idx + 1 >= args.len) {
+                std.log.err("--rootfs requires a path", .{});
+                return;
+            }
+            if (!path.setRootfs(args[start_idx + 1])) {
+                std.log.err("rootfs path too long", .{});
+                return;
+            }
+            start_idx += 2;
+        } else if (std.mem.eql(u8, args[start_idx], "--loader")) {
+            if (start_idx + 1 >= args.len) {
+                std.log.err("--loader requires a path", .{});
+                return;
+            }
+            loader_path = args[start_idx + 1];
+            start_idx += 2;
+        } else {
+            break;
         }
-        if (!path.setRootfs(args[2])) {
-            std.log.err("rootfs path too long", .{});
-            return;
-        }
-        start_idx = 3;
+    }
+
+    if (start_idx >= args.len) {
+        std.log.err("no program specified", .{});
+        return;
     }
 
     var argv_arena = std.heap.ArenaAllocator.init(init.gpa);
@@ -68,6 +86,7 @@ pub fn main(init: std.process.Init) !void {
     var entering = true;
     var path_buf: [4096]u8 = undefined;
     var new_path_buf: [4096]u8 = undefined;
+    var patched_buf: [4096]u8 = undefined;
 
     while (true) {
         _ = ptrace.call(ptrace.PTRACE_SYSCALL, pid, 0, 0);
@@ -116,17 +135,40 @@ pub fn main(init: std.process.Init) !void {
 
                 if (path.rootfs_len > 0 and path.shouldPrefix(p)) {
                     if (path.build(&new_path_buf, p)) |new_path| {
+                        var target_path: []const u8 = new_path;
+
                         if (nr == syscalls.SYS_EXECVE) {
                             const new_path_z: [*:0]const u8 = @ptrCast(new_path.ptr);
                             if (interp.locate(new_path_z)) |info| {
-                                std.log.info("execve: dynamic binary, interp_size={d}", .{info.interp_size});
+                                if (loader_path) |loader| {
+                                    const suffix = ".zproot";
+                                    if (new_path.len + suffix.len + 1 <= patched_buf.len) {
+                                        @memcpy(patched_buf[0..new_path.len], new_path);
+                                        @memcpy(patched_buf[new_path.len .. new_path.len + suffix.len], suffix);
+                                        patched_buf[new_path.len + suffix.len] = 0;
+                                        const patched_z: [*:0]const u8 = @ptrCast(&patched_buf);
+
+                                        interp.patch(new_path_z, patched_z, info, loader) catch |e| {
+                                            std.log.warn("execve: patch failed: {}", .{e});
+                                            entering = !entering;
+                                            continue;
+                                        };
+
+                                        target_path = patched_buf[0 .. new_path.len + suffix.len];
+                                        std.log.info("execve: patched {s} -> {s}", .{ p, target_path });
+                                    } else {
+                                        std.log.warn("execve: patched path too long", .{});
+                                    }
+                                } else {
+                                    std.log.info("execve: dynamic binary, no --loader set", .{});
+                                }
                             } else |_| {
                                 std.log.info("execve: static binary", .{});
                             }
                         }
 
                         const scratch = r.sp() - 8192;
-                        memory_write.cstring(pid, scratch, new_path) catch {
+                        memory_write.cstring(pid, scratch, target_path) catch {
                             std.log.err("write failed for {s}", .{p});
                             entering = !entering;
                             continue;
