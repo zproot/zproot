@@ -193,3 +193,19 @@ pub fn patch(
 
     return .{ .used_new_location = true, .new_offset = append_off };
 }
+
+pub fn readInterp(path: [*:0]const u8, info: InterpInfo, buf: []u8) ![]u8 {
+    const fd = try openRead(path);
+    defer closeFd(fd);
+
+    const size: usize = @intCast(info.interp_size);
+    if (size > buf.len) return error.BufferTooSmall;
+
+    const n = try preadFd(fd, buf[0..size], info.interp_offset);
+    if (n == 0) return error.ReadFailed;
+
+    if (std.mem.indexOfScalar(u8, buf[0..n], 0)) |end| {
+        return buf[0..end];
+    }
+    return error.NoNull;
+}
