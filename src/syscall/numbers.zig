@@ -21,6 +21,11 @@ pub fn pathArgIndex(nr: u64) u8 {
     return 1;
 }
 
+pub fn envpArgIndex(nr: u64) u8 {
+    if (nr == SYS_EXECVEAT) return 3;
+    return 2;
+}
+
 pub fn isExec(nr: u64) bool {
     return nr == SYS_EXECVE or nr == SYS_EXECVEAT;
 }
