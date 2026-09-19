@@ -11,6 +11,12 @@ pub const PTRACE_GETSIGINFO: u32 = 0x4202;
 pub const PTRACE_GETREGSET: u32 = 0x4204;
 pub const PTRACE_SETREGSET: u32 = 0x4205;
 pub const PTRACE_SYSCALL: u32 = 24;
+pub const PTRACE_SETOPTIONS: u32 = 0x4200;
+pub const PTRACE_O_TRACESYSGOOD: u32 = 1;
+pub const PTRACE_O_TRACEFORK: u32 = 2;
+pub const PTRACE_O_TRACEVFORK: u32 = 4;
+pub const PTRACE_O_TRACECLONE: u32 = 8;
+pub const PTRACE_O_TRACEEXEC: u32 = 0x10;
 
 pub fn call(request: u32, pid: types.pid_t, addr: usize, data: usize) usize {
     return linux.syscall4(.ptrace, request, @intCast(pid), addr, data);
