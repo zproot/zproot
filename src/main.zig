@@ -176,7 +176,7 @@ pub fn main(init: std.process.Init) !void {
                     if (path.build(&new_path_buf, p)) |new_path| {
                         var target_path: []const u8 = new_path;
 
-                        if (nr == syscalls.SYS_EXECVE) {
+                        if (syscalls.isExec(nr)) {
                             const new_path_z: [*:0]const u8 = @ptrCast(new_path.ptr);
                             if (interp.locate(new_path_z)) |info| {
                                if (loader_path) |loader| {
