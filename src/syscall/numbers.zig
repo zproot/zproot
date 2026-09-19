@@ -8,14 +8,19 @@ pub const SYS_NEWFSTATAT: u64 = if (arch == .x86_64) 262 else 79;
 pub const SYS_READLINKAT: u64 = if (arch == .x86_64) 267 else 78;
 pub const SYS_FACCESSAT: u64 = if (arch == .x86_64) 269 else 48;
 pub const SYS_EXECVE: u64 = if (arch == .x86_64) 59 else 221;
+pub const SYS_EXECVEAT: u64 = if (arch == .x86_64) 322 else 281;
 
 pub fn isPath(nr: u64) bool {
     return nr == SYS_OPENAT or nr == SYS_OPENAT2 or nr == SYS_STATX or
         nr == SYS_NEWFSTATAT or nr == SYS_READLINKAT or nr == SYS_FACCESSAT or
-        nr == SYS_EXECVE;
+        nr == SYS_EXECVE or nr == SYS_EXECVEAT;
 }
 
 pub fn pathArgIndex(nr: u64) u8 {
     if (nr == SYS_EXECVE) return 0;
     return 1;
+}
+
+pub fn isExec(nr: u64) bool {
+    return nr == SYS_EXECVE or nr == SYS_EXECVEAT;
 }
