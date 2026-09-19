@@ -167,10 +167,12 @@ pub fn main(init: std.process.Init) !void {
                 continue;
             };
             const nr = r.nr();
+            std.log.info("syscall nr={d}", .{nr});
             if (syscalls.isPath(nr)) {
                 const idx = syscalls.pathArgIndex(nr);
                 const path_addr = r.arg(idx);
                 const p = memory_read.cstring(pid, path_addr, &path_buf) catch "<read failed>";
+                std.log.info("  path={s}", .{p});
 
                 if (path.rootfs_len > 0 and path.shouldPrefix(p)) {
                     if (path.build(&new_path_buf, p)) |new_path| {
@@ -199,9 +201,9 @@ pub fn main(init: std.process.Init) !void {
                                            if (std.fmt.bufPrint(&real_interp_buf, "{s}{s}", .{ path.rootfs(), interp_name })) |ri| {
                                                if (std.fmt.bufPrint(&env_buf, "ZPROOT_REAL_INTERP={s}", .{ri})) |es| {
                                                    const env_scratch = r.sp() - 65536;
-                                                   const orig_envp = r.arg(2);
+                                                   const orig_envp = r.arg(syscalls.envpArgIndex(nr));
                                                    if (rewriteEnvp(pid, orig_envp, env_scratch, es)) |new_envp| {
-                                                       regs.setArg(pid, 2, new_envp) catch {
+                                                       regs.setArg(pid, syscalls.envpArgIndex(nr), new_envp) catch {
                                                           std.log.warn("execve: setarg envp failed", .{});
                                                        };
                                                        std.log.info("execve: patched {s} interp={s}", .{ p, ri });
