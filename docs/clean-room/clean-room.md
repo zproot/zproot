@@ -22,13 +22,13 @@ These are the primary sources from which the implementation is derived.
 
 ### Linux man pages
 
-- ptrace(2) — the syscall at the core of the tracer
-- seccomp(2) — the seccomp filter mechanism
-- execve(2), execveat(2) — program loading
-- openat(2), openat2(2) — path opening
-- statx(2), newfstatat(2) — file metadata
-- readlinkat(2), faccessat(2) — path queries
-- clone(2) — process creation
+- [`ptrace(2)`](https://man7.org/linux/man-pages/man2/ptrace.2.html) — the syscall at the core of the tracer
+- [`seccomp(2)`] — the seccomp filter mechanism
+- [`execve(2)`], execveat(2) — program loading
+- [`openat(2)`], openat2(2) — path opening
+- [`statx(2)`], newfstatat(2) — file metadata
+- [`readlinkat(2)`], faccessat(2) — path queries
+- [`clone(2)`] — process creation
 - [`sigaction(2)`](https://man7.org/linux/man-pages/man2/sigaction.2.html) — signal handling
 - [`process_vm_readv(2)`](https://man7.org/linux/man-pages/man2/process_vm_readv.2.html), [`process_vm_writev(2)`](https://man7.org/linux/man-pages/man2/process_vm_writev.2.html) — cross-process memory
 - [`wait4(2)`](https://man7.org/linux/man-pages/man2/wait4.2.html), waitid(2) — child process status
