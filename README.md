@@ -151,7 +151,7 @@ Android frontend lives at [zproot/zproot-android](https://github.com/zproot/zpro
 
 | Document | Description |
 |----------|-------------|
-| docs/clean-room.md | What sources were consulted and what was avoided (required for MIT) |
+| [docs/clean-room/clean-room.md](https://github.com/zproot/zproot/blob/master/docs/clean-room/clean-room.md) | What sources were consulted and what was avoided (required for MIT) |
 
 ## Clean-room statement
 
