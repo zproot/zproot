@@ -23,15 +23,15 @@ These are the primary sources from which the implementation is derived.
 ### Linux man pages
 
 - [`ptrace(2)`](https://man7.org/linux/man-pages/man2/ptrace.2.html) — the syscall at the core of the tracer
-- [`seccomp(2)`] — the seccomp filter mechanism
-- [`execve(2)`], execveat(2) — program loading
-- [`openat(2)`], openat2(2) — path opening
-- [`statx(2)`], newfstatat(2) — file metadata
-- [`readlinkat(2)`], faccessat(2) — path queries
-- [`clone(2)`] — process creation
+- [`seccomp(2)`](https://man7.org/linux/man-pages/man2/seccomp.2.html) — the seccomp filter mechanism
+- [`execve(2)`](https://man7.org/linux/man-pages/man2/execve.2.html), [`execveat(2)`](https://man7.org/linux/man-pages/man2/execveat.2.html) — program loading
+- [`openat(2)`](https://man7.org/linux/man-pages/man2/openat.2.html), [`[openat2(2.2)`](https://man7.org/linux/man-pages/man2/openat2.2.html) — path opening
+- [`statx(2)`](https://man7.org/linux/man-pages/man2/statx.2.html), `newfstatat(2)` — file metadata
+- `readlinkat(2)`, `faccessat(2)` — path queries
+- [`clone(2)`](https://man7.org/linux/man-pages/man2/clone.2.html) — process creation
 - [`sigaction(2)`](https://man7.org/linux/man-pages/man2/sigaction.2.html) — signal handling
 - [`process_vm_readv(2)`](https://man7.org/linux/man-pages/man2/process_vm_readv.2.html), [`process_vm_writev(2)`](https://man7.org/linux/man-pages/man2/process_vm_writev.2.html) — cross-process memory
-- [`wait4(2)`](https://man7.org/linux/man-pages/man2/wait4.2.html), waitid(2) — child process status
+- [`wait4(2)`](https://man7.org/linux/man-pages/man2/wait4.2.html), `waitid(2)` — child process status
 
 ### Linux kernel source
 
@@ -122,35 +122,3 @@ Design concepts and interface conventions are not copyrightable. The implementat
 zproot's core tracer, path translator, seccomp handler, and `PT_INTERP` loader were written from scratch. The implementation is based on the Linux kernel interface (man pages, syscall tables, ELF specification), the PRoot academic paper, and public usage documentation.
 
 No source code from any GPL-licensed PRoot project was read, copied, or translated during the development of zproot.
-
-Related documents
-
-Document Description
-README.md Project overview
-docs/architecture/ Architecture and design notes
-docs/adr/ Architecture Decision Records
-LICENSE MIT license text
-
-Links used in this document
-
-Label URL
-PRoot https://github.com/proot-me/proot
-termux-proot https://github.com/termux/termux-proot
-proot-distro https://github.com/termux/proot-distro
-oonid/pr https://github.com/oonid/pr
-Zig https://github.com/ziglang/zig
-Linux kernel https://github.com/torvalds/linux
-ptrace(2) https://man7.org/linux/man-pages/man2/ptrace.2.html
-seccomp(2) https://man7.org/linux/man-pages/man2/seccomp.2.html
-execve(2) https://man7.org/linux/man-pages/man2/execve.2.html
-execveat(2) https://man7.org/linux/man-pages/man2/execveat.2.html
-openat(2) https://man7.org/linux/man-pages/man2/openat.2.html
-openat2(2) https://man7.org/linux/man-pages/man2/openat2.2.html
-statx(2) https://man7.org/linux/man-pages/man2/statx.2.html
-clone(2) https://man7.org/linux/man-pages/man2/clone.2.html
-sigaction(2) https://man7.org/linux/man-pages/man2/sigaction.2.html
-process_vm_readv(2) https://man7.org/linux/man-pages/man2/process_vm_readv.2.html
-wait4(2) https://man7.org/linux/man-pages/man2/wait4.2.html
-ELF specification https://refspecs.linuxfoundation.org/elf/elf.pdf
-AArch64 ELF ABI https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst
-x86-64 System V ABI https://gitlab.com/x86-psABIs/x86-64-ABI
