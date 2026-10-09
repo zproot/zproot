@@ -1,6 +1,6 @@
 # zproot
 
-Android app that runs Linux distributions via a clean-room Zig reimplementation of PRoot — no root, no Termux required.
+Android app that runs Linux distributions via a clean-room Zig reimplementation of [PRoot](https://github.com/proot-me/proot) — no root, no Termux required.
 
 ## What it does
 
@@ -14,8 +14,8 @@ Android app that runs Linux distributions via a clean-room Zig reimplementation 
 
 zproot is a work in progress. The core tracer is being written from scratch in Zig, with the following milestones:
 
-| Milestone |  Status |
-|-----------|---------|
+| Milestone | Status |
+|-----------|--------|
 | M1: ptrace syscall loop | done |
 | M2: Read syscall arguments | done |
 | M3: Path rewriting (openat) | done |
@@ -25,6 +25,7 @@ zproot is a work in progress. The core tracer is being written from scratch in Z
 | M7: aarch64-linux-android build | done |
 | M8: Android APK with path redirect | done |
 | M9: Rootfs prefix, Alpine install | in progress |
+| M10: PT_INTERP loader | in progress |
 
 The APK lives at [zproot/zproot-android](https://github.com/zproot/zproot-android). If you need something usable today, use [pr](https://github.com/oonid/pr) or [Termux](https://github.com/termux/termux-app).
 
@@ -36,48 +37,47 @@ Alpine, Debian, Ubuntu, Arch Linux, Fedora, OpenSUSE, Manjaro, Rocky Linux
 
 zproot sits between a Linux program and the Android kernel. It uses Linux `ptrace()` to intercept syscalls and translate filesystem paths, creating a virtual root filesystem without actual root privileges. When the guest calls `openat("/etc/passwd")`, zproot rewrites the syscall argument to point at `/data/data/com.zproot/files/rootfs/etc/passwd`. The kernel opens the real file. The guest sees `/etc/passwd`.
 
-## The app will bundle:
+## What the app will bundle
 
-- zproot core (Zig) — clean-room reimplementation of the ptrace tracer, path translator, and Android compatibility layer
-- zproot-cli (Zig) — install, login, remove, and manage distributions
-- Android APK (Kotlin + Compose) — install/login/remove UI with embedded terminal
+- ***zproot-core*** (Zig) — clean-room reimplementation of the ptrace tracer, path translator, and Android compatibility layer
+- ***zproot-cli*** (Zig) — install, login, remove, and manage distributions
+- ***Android APK*** (Kotlin + Compose) — install/login/remove UI with embedded terminal
 
 ## Android compatibility (planned)
 
 Android enforces several restrictions on app processes that a tracer must work around:
 
-- W^X (Write-XOR-Execute): Prevents executing files in app-writable directories
-- SELinux: Blocks certain filesystem operations
-- Zygote seccomp: Blocks 18+ syscalls via BPF filter
+- ***W^X (Write-XOR-Execute)***: prevents executing files in app-writable directories
+- ***SELinux***: blocks certain filesystem operations
+- ***Zygote seccomp***: blocks 18+ syscalls via BPF filter
 
-## zproot will handle these with:
+## How zproot will handle these
 
-- SIGSYS handlers — intercept seccomp-blocked syscalls and emulate them in userspace
-- Loader mechanism — stage the tracer's loader in nativeLibraryDir to bypass W^X
-- Fake root (--change-id=0:0) — makes dpkg and apt-get work without real root
-- CLONE_VM/CLONE_VFORK stripping — allows Rust's cargo build to run inside the guest
+- ***SIGSYS handlers*** — intercept seccomp-blocked syscalls and emulate them in userspace
+- ***Loader mechanism*** — stage the tracer's loader in nativeLibraryDir to bypass W^X
+- ***Fake root (--change-id=0:0)*** — makes dpkg and apt-get work without real root
+- ***CLONE_VM / CLONE_VFORK stripping*** — allows Rust's cargo build to run inside the guest
 
 ## Why Zig instead of C
 
 The upstream proot is a mature but complex C codebase (~90 source files). Rewriting it in Zig gives us:
 
-- Direct syscall control via std.os.linux and inline asm, without an FFI layer
-- Built-in Android cross-compilation — `zig build -Dtarget=aarch64-linux-android` just works
-- Compile-time code generation (comptime) for multi-architecture register handling
-- Small static binary — no runtime, no libc baggage if we want it
-- Clean-room licensing — MIT, because we own the copyright outright
+- ***Direct syscall control via std.os.linux*** and inline asm, without an FFI layer
+- ***Built-in Android cross-compilation*** — zig build -Dtarget=aarch64-linux-android just works
+- ***Compile-time code generation (comptime)*** for multi-architecture register handling
+- ***Small static binary*** — no runtime, no libc baggage if we want it
+- ***Clean-room licensing*** — MIT, because we own the copyright outright
 
 ## Building
 
 Prerequisites
 
-- Zig 0.16.0
-- Java 17+ (for the APK, once it exists)
+- ***Zig 0.16.0***
+- ***Java 17+*** (for the APK, once it exists)
 
 ## Build steps (host, x86_64 Linux)
 
 ```bash
-
 # Clone
 git clone https://github.com/zproot/zproot
 cd zproot
@@ -87,15 +87,12 @@ zig build
 
 # Run against a test binary
 ./zig-out/bin/zproot /bin/true
-
 ```
 
-Cross-compile for Android (M7+)
+## Cross-compile for Android
 
 ```bash
-
 zig build -Dtarget=aarch64-linux-android
-
 ```
 
 ## Testing
@@ -103,12 +100,12 @@ zig build -Dtarget=aarch64-linux-android
 Unit tests
 
 ```bash
-
 zig build test
-
 ```
 
-Integration tests (once a guest rootfs is wired up)
+## Integration tests
+
+Once a guest rootfs is wired up:
 
 ```bash
 # On a connected Android device:
@@ -130,103 +127,19 @@ zproot/
 │   ├── exec.zig               # doFork, execvpZ
 │   └── seccomp.zig            # SIGSYS handler
 ├── native/                    # Architecture-specific assembly and linker scripts
-│   ├── aarch64/
-│   ├── x86_64/
-│   ├── arm/
-│   ├── asm/
-│   └── linker/
 ├── build/                     # Build system configs
-│   ├── zig/
-│   ├── ci/
-│   ├── targets/
-│   └── scripts/
 ├── scripts/                   # Automation scripts
-│   ├── build/
-│   ├── test/
-│   ├── release/
-│   ├── ci/
-│   ├── dev/
-│   ├── format/
-│   ├── lint/
-│   ├── deploy/
-│   └── install/
 ├── test/                      # Tests
-│   ├── unit/
-│   ├── integration/
-│   ├── e2e/
-│   ├── fuzz/
-│   ├── fixtures/
-│   ├── helpers/
-│   ├── benchmarks/
-│   ├── snapshots/
-│   └── regression/
 ├── docs/                      # Documentation
-│   ├── architecture/
-│   ├── adr/
-│   ├── api/
-│   ├── design/
-│   ├── native/
-│   ├── android/
-│   ├── security/
-│   ├── troubleshooting/
-│   ├── roadmap/
-│   ├── tutorials/
-│   ├── reference/
-│   ├── contributing/
-│   └── clean-room.md          # Clean-room methodology (required for MIT)
 ├── examples/                  # Minimal usage examples
-│   ├── minimal/
-│   ├── redirect/
-│   ├── rootfs/
-│   ├── seccomp/
-│   └── execve/
 ├── tools/                     # Custom developer tools
-│   ├── trace-viewer/
-│   ├── syscall-table-gen/
-│   ├── binary-inspector/
-│   ├── register-dump/
-│   ├── disasm/
-│   └── elf-inspector/
 ├── third-party/               # Vendored dependencies
-│   ├── zig-wayland/
-│   ├── zig-wlroots/
-│   ├── zig-android/
-│   ├── licenses/
-│   └── notices/
 ├── patches/                   # Patches to dependencies
-│   ├── upstream/
-│   ├── custom/
-│   └── archived/
 ├── dist/                      # Distribution artifacts
-│   ├── apk/
-│   ├── tarballs/
-│   ├── musl/
-│   ├── android/
-│   └── checksums/
 ├── releases/                  # Release management
-│   ├── v0.1/
-│   ├── templates/
-│   └── changelog/
 ├── assets/                    # Runtime assets
-│   ├── terminfo/
-│   ├── shell-init/
-│   ├── motd/
-│   └── fonts/
 ├── configs/                   # Editor and linter configs
-│   ├── editorconfig/
-│   ├── formatting/
-│   ├── linters/
-│   └── hooks/
 ├── .github/                   # GitHub configuration
-│   ├── workflows/
-│   ├── actions/
-│   ├── ISSUE_TEMPLATE/
-│   ├── PULL_REQUEST_TEMPLATE/
-│   ├── CODEOWNERS/
-│   ├── FUNDING/
-│   ├── SECURITY/
-│   ├── dependabot/
-│   └── profile/
 ├── build.zig                  # Build graph
 ├── LICENSE
 └── README.md
@@ -253,11 +166,17 @@ This is what allows zproot to be released under the MIT license while the upstre
 
 ## Credits
 
-- proot — the original concept and design (GPL-2.0). Not used as source.
-- termux-proot — Android patch inspiration (GPL-2.0). Not used as source.
-- proot-distro — distribution plugin design (GPL-3.0). Not used as source.
-- Zig — the language and toolchain.
+- [proot](https://github.com/proot-me/proot) — the original concept and design (GPL-2.0). Not used as source.
+- [termux-proot](https://github.com/termux/termux-proot) — Android patch inspiration (GPL-2.0). Not used as source.
+- [proot-distro](https://github.com/termux/proot-distro) — distribution plugin design (GPL-3.0). Not used as source.
+- [Zig](https://codeberg.org/ziglang/zig) — the language and toolchain.
 
 ## License
 
-MIT — see LICENSE.
+[MIT](https://github.com/zproot/zproot/blob/master/LICENSE) — see LICENSE.
+
+## Related repositories
+
+- [zproot/zproot](https://github.com/zproot/zproot) — tracer core (this repo)
+- [zproot/zproot-android](https://github.com/zproot/zproot-android) — Android frontend
+- [zproot/.github](https://github.com/zproot/.github) — organization profile
