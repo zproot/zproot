@@ -25,7 +25,7 @@ These are the primary sources from which the implementation is derived.
 - [`ptrace(2)`](https://man7.org/linux/man-pages/man2/ptrace.2.html) — the syscall at the core of the tracer
 - [`seccomp(2)`](https://man7.org/linux/man-pages/man2/seccomp.2.html) — the seccomp filter mechanism
 - [`execve(2)`](https://man7.org/linux/man-pages/man2/execve.2.html), [`execveat(2)`](https://man7.org/linux/man-pages/man2/execveat.2.html) — program loading
-- [`openat(2)`](https://man7.org/linux/man-pages/man2/openat.2.html), [`[openat2(2.2)`](https://man7.org/linux/man-pages/man2/openat2.2.html) — path opening
+- [`openat(2)`](https://man7.org/linux/man-pages/man2/openat.2.html), [`openat(2.2)`](https://man7.org/linux/man-pages/man2/openat2.2.html) — path opening
 - [`statx(2)`](https://man7.org/linux/man-pages/man2/statx.2.html), `newfstatat(2)` — file metadata
 - `readlinkat(2)`, `faccessat(2)` — path queries
 - [`clone(2)`](https://man7.org/linux/man-pages/man2/clone.2.html) — process creation
