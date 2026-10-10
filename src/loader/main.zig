@@ -195,22 +195,22 @@ const arch = builtin.cpu.arch;
 
 pub export fn _start() callconv(.naked) noreturn {
     if (arch == .aarch64) {
-        asm volatile(
+        asm volatile (
             \\ mov x0, sp
             \\ b loaderMain
         );
     } else if (arch == .x86_64) {
-        asm volatile(
+        asm volatile (
             \\ mov %rsp, %rdi
             \\ jmp loaderMain
         );
     } else if (arch == .arm) {
-        asm volatile(
+        asm volatile (
             \\ mov r0, sp
             \\ b loaderMain
         );
     } else if (arch == .x86) {
-        asm volatile(
+        asm volatile (
             \\ mov %esp, %eax
             \\ push %eax
             \\ call loaderMain

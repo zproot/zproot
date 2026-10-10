@@ -19,7 +19,7 @@ pub fn isAppPrivatePath(path: []const u8) bool {
 
 pub fn isPassthroughRoot(path: []const u8) bool {
     const roots = [_][]const u8{
-        "/proc", "/sys", "/dev", "/system",
+        "/proc", "/sys",    "/dev",          "/system",
         "/apex", "/vendor", "/linkerconfig",
     };
     for (roots) |r| {
